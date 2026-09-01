@@ -32,30 +32,37 @@ async function loadFile(file){if(typeof XLSX==='undefined'){toast('No se pudo ca
 async function captureDashboard(format){
   const el=$('#captureArea');
   const base=safeName(state.file.name.replace(/\.[^.]+$/,''));
-  const ext=format==='jpg'?'jpg':'png';
-  const filename=`${base}_dashboard.${ext}`;
+  const isJpg=format==='jpg';
+  const filename=`${base}_dashboard.${isJpg?'jpg':'png'}`;
   try{
     showLoading(true,'Preparando imagen…');
-    await new Promise(r=>setTimeout(r,180));
-    let dataUrl;
-    if(window.htmlToImage){
-      const opts={pixelRatio:2,cacheBust:true,backgroundColor:getComputedStyle(document.body).backgroundColor};
-      dataUrl=format==='jpg'
-        ? await htmlToImage.toJpeg(el,{...opts,quality:.95})
-        : await htmlToImage.toPng(el,opts);
-    }else if(window.html2canvas){
-      const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:getComputedStyle(document.body).backgroundColor});
-      dataUrl=canvas.toDataURL(format==='jpg'?'image/jpeg':'image/png',.95);
-    }else{
-      throw new Error('No se cargó el módulo de exportación.');
-    }
+    await new Promise(r=>setTimeout(r,250));
+    // html2canvas is the most reliable here for Plotly/canvas content on GitHub Pages.
+    if(!window.html2canvas) throw new Error('Módulo de captura no disponible');
+    const canvas=await html2canvas(el,{
+      scale:1.5,
+      useCORS:true,
+      allowTaint:false,
+      logging:false,
+      backgroundColor:'#081525',
+      scrollX:0,
+      scrollY:-window.scrollY,
+      windowWidth:Math.max(document.documentElement.clientWidth,el.scrollWidth),
+      width:el.scrollWidth,
+      height:el.scrollHeight,
+      onclone:(doc)=>{
+        doc.querySelectorAll('.no-export').forEach(n=>n.style.display='none');
+      }
+    });
+    const dataUrl=canvas.toDataURL(isJpg?'image/jpeg':'image/png',isJpg?.94:1);
     const a=document.createElement('a');
-    a.href=dataUrl;a.download=filename;
-    document.body.appendChild(a);a.click();a.remove();
-    toast(`Imagen ${ext.toUpperCase()} descargada`);
+    a.href=dataUrl;a.download=filename;a.style.display='none';
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>a.remove(),100);
+    toast(`Vista ${isJpg?'JPG':'PNG'} descargada`);
   }catch(err){
     console.error(err);
-    toast('No se pudo generar la imagen. Revise que tenga conexión a Internet y vuelva a intentarlo.');
+    toast('No se pudo generar la imagen completa. Puede descargar la gráfica circular con sus botones PNG/JPG/SVG.');
   }finally{showLoading(false)}
 }
 async function exportPlot(id,format){
