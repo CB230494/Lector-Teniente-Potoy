@@ -25,17 +25,43 @@
   th,td{padding:5px 6px!important}
 }
 
-/* v7 - table-first interface */
-.chart-grid,.chart-actions{display:none!important}
-.table-wrap{max-height:none!important;overflow-y:visible!important;overflow-x:auto!important}
-.table-card{margin-top:20px!important}
+/* v9 STABLE — DOM is preserved; unwanted UI is hidden only with CSS */
+.export-actions,
+.chart-grid,
+.chart-actions,
+.insight-card,
+.kpi-grid .kpi:first-child {
+  display:none !important;
+}
 
-/* v8 — compact information dashboard; theme rules preserved */
-.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
-.insight-card{display:none!important}
-.table-card{margin-top:16px!important}
-.table-wrap{max-height:none!important;overflow-y:visible!important;overflow-x:auto!important}
-.table-card table{font-size:12px!important;line-height:1.15!important}
-.table-card th,.table-card td{padding:7px 9px!important}
-.table-card th{white-space:nowrap!important}
-@media(max-width:900px){.kpi-grid{grid-template-columns:1fr!important}}
+/* Compact three-card summary */
+.kpi-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:14px !important;
+}
+
+/* Full unified table, no internal vertical scroll */
+.table-wrap{
+  max-height:none !important;
+  overflow-y:visible !important;
+  overflow-x:auto !important;
+}
+.table-card{
+  margin-top:16px !important;
+}
+.table-card table{
+  width:100% !important;
+  font-size:12px !important;
+  line-height:1.15 !important;
+}
+.table-card th,.table-card td{
+  padding:7px 9px !important;
+}
+.table-card th{
+  white-space:nowrap !important;
+}
+
+/* Keep theme toggle and all existing theme variables untouched */
+@media(max-width:900px){
+  .kpi-grid{grid-template-columns:1fr !important}
+}
