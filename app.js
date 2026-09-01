@@ -25,9 +25,40 @@ let filled=0,total=state.filtered.length*state.headers.length;state.filtered.for
 function plotLayout(extra={}){return {margin:{l:55,r:20,t:18,b:48},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'Inter, system-ui',color:getComputedStyle(document.body).getPropertyValue('--text').trim(),size:11},showlegend:true,legend:{orientation:'h',y:-.13},...extra}}
 const config={displayModeBar:false,responsive:true,locale:'es'};
 function renderCharts(){}
+
+function normKey(v){
+  return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .trim().toUpperCase().replace(/\s+/g,' ');
+}
+function uniqueStatusBy(field){
+  const ind=state.indicators[0];
+  const map=new Map();
+  if(!field||!ind) return map;
+  state.filtered.forEach(r=>{
+    const key=normKey(r[field]);
+    if(!key) return;
+    const yes=isYes(r[ind]);
+    if(!map.has(key)) map.set(key,yes);
+    else map.set(key,map.get(key)||yes); // if any covered row is Sí, the grouped unit is Sí
+  });
+  return map;
+}
+function renderCantonSummary(){
+  const cantonH=state.headers.find(h=>/cant[oó]n/i.test(h));
+  const m=uniqueStatusBy(cantonH);
+  const total=m.size;
+  const yes=[...m.values()].filter(Boolean).length;
+  const no=total-yes;
+  const pct=total?yes/total*100:0;
+  const y=document.getElementById('cantonYes'),n=document.getElementById('cantonNo'),
+        p=document.getElementById('cantonPct'),t=document.getElementById('cantonTotal');
+  if(y)y.textContent=yes;if(n)n.textContent=no;if(p)p.textContent=pct.toFixed(1)+'%';
+  if(t)t.textContent=total+' cantones únicos';
+}
+
 function renderTable(){const thead=$('#dataTable thead'),tbody=$('#dataTable tbody');thead.innerHTML='<tr>'+state.headers.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr>';const start=(state.page-1)*state.pageSize, rows=state.filtered.slice(start,start+state.pageSize);tbody.innerHTML=rows.map(r=>'<tr>'+state.headers.map(h=>{const v=r[h];if(state.indicatorCols.includes(h)&&['Sí','No'].includes(v))return `<td><span class="chip ${v==='Sí'?'yes':'no'}">${v}</span></td>`;return `<td title="${esc(v)}">${esc(v)}</td>`}).join('')+'</tr>').join('');const pages=Math.max(1,Math.ceil(state.filtered.length/state.pageSize));$('#pageInfo').textContent=`Página ${state.page} de ${pages}`;$('#prevPage').disabled=state.page<=1;$('#nextPage').disabled=state.page>=pages;$('#tableInfo').textContent=`${fmt(state.filtered.length)} registros visibles · ${fmt(state.headers.length)} columnas`}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function renderAll(){renderKPIs();renderInsights();renderCharts();renderTable();updateMeta()}
+function renderAll(){renderKPIs();renderInsights();renderCharts();renderCantonSummary();renderTable();updateMeta()}
 async function loadFile(file){if(typeof XLSX==='undefined'){toast('No se pudo cargar la librería de Excel. Revisa tu conexión a Internet.');return}$('#loading').classList.remove('hidden');try{const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array',cellDates:true});state.workbook=wb;state.file=file;state.sheets={};for(const name of wb.SheetNames){state.sheets[name]=parseSheet(wb.Sheets[name])}const valid=wb.SheetNames.filter(n=>state.sheets[n].rows.length&&state.sheets[n].headers.length);if(!valid.length)throw new Error('No se encontró una tabla utilizable en el archivo.');valid.sort((a,b)=>state.sheets[b].rows.length-state.sheets[a].rows.length);state.sheetName=valid[0];const sel=$('#sheetSelect');sel.innerHTML='';valid.forEach(n=>sel.add(new Option(`${n} (${state.sheets[n].rows.length})`,n)));sel.value=state.sheetName;processCurrentSheet();$('#uploadView').classList.add('hidden');$('#dashboard').classList.remove('hidden');$('#newFileBtn').classList.remove('hidden');setTimeout(()=>window.dispatchEvent(new Event('resize')),50);toast(`Archivo leído: ${fmt(state.rows.length)} registros`)}catch(e){console.error(e);toast(e.message||'No se pudo leer el archivo.')}finally{$('#loading').classList.add('hidden')}}
 async function captureDashboard(format){
   try{
