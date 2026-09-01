@@ -6,3 +6,21 @@
 @media print{.topbar,.no-export,.filter-panel{display:none!important}body{background:#fff}.shell{padding:0;max-width:none}.dashboard-head{margin:0 0 8px}.chart-card,.table-card,.insight-card,.kpi{box-shadow:none;break-inside:avoid}.table-wrap{max-height:none;overflow:visible}.report-footer{display:flex}}
 
 .single-chart{grid-template-columns:1fr}.pie-only{max-width:760px;width:100%;margin:0 auto}.pie-only .chart{height:430px}
+
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  html,body{background:#fff!important}
+  body{font-size:10pt}
+  #dashboard{width:100%!important;max-width:none!important}
+  #captureArea{width:100%!important;max-width:none!important;padding:0!important}
+  .topbar,.upload-view,.no-export,.chart-actions,#toast,.loading{display:none!important}
+  .dashboard-head{margin:0 0 8px!important}
+  .kpi-grid{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
+  .kpi{min-height:76px!important;padding:10px!important}
+  .chart-card,.insight-card,.quality-card,.table-card{break-inside:avoid;page-break-inside:avoid}
+  .pie-only{max-width:520px!important;margin:8px auto!important}
+  .pie-only .chart{height:280px!important}
+  .table-wrap{max-height:none!important;overflow:visible!important}
+  table{font-size:8pt!important}
+  th,td{padding:5px 6px!important}
+}
