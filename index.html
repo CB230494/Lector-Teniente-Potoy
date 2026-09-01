@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Lector dinámico de Tabla de Control de Operaciones" />
+  <title>Control de Operaciones | Lector dinámico</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">CO</div>
+      <div><span class="eyebrow">LECTOR INTELIGENTE</span><h1>Control de Operaciones</h1></div>
+    </div>
+    <div class="top-actions">
+      <button id="themeBtn" class="icon-btn" type="button" title="Cambiar tema">◐</button>
+      <button id="newFileBtn" class="btn ghost hidden" type="button">Cambiar archivo</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section id="uploadView" class="upload-view">
+      <div class="hero-copy">
+        <span class="pill">Excel → análisis automático</span>
+        <h2>Sube el archivo.<br><span>La app hace el resto.</span></h2>
+        <p>Detecta la tabla, limpia espacios, interpreta indicadores, crea métricas, gráficos, filtros y una vista exportable.</p>
+      </div>
+      <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Cargar archivo Excel">
+        <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.csv" hidden />
+        <div class="upload-icon">⇧</div>
+        <h3>Arrastra aquí tu Excel</h3>
+        <p>o selecciónalo desde tu equipo</p>
+        <button id="chooseBtn" class="btn primary" type="button">Seleccionar archivo</button>
+        <small>.xlsx · .xls · .xlsm · .csv</small>
+      </div>
+      <div class="privacy-note">🔒 El archivo se procesa localmente en tu navegador. No se envía a un servidor.</div>
+    </section>
+
+    <section id="dashboard" class="dashboard hidden">
+      <div class="dashboard-head export-surface">
+        <div>
+          <span class="eyebrow">ARCHIVO ANALIZADO</span>
+          <h2 id="fileName">—</h2>
+          <div id="fileMeta" class="file-meta">—</div>
+        </div>
+        <div class="export-actions no-export">
+          <div class="segmented">
+            <button data-capture="png" class="btn secondary">Vista PNG</button>
+            <button data-capture="jpg" class="btn secondary">Vista JPG</button>
+          </div>
+          <button id="printBtn" class="btn ghost">Imprimir / PDF</button>
+        </div>
+      </div>
+
+      <section class="filter-panel no-export">
+        <div class="filter-title"><div><span class="eyebrow">EXPLORAR</span><h3>Filtros de análisis</h3></div><button id="clearFiltersBtn" class="link-btn">Limpiar filtros</button></div>
+        <div class="filter-grid">
+          <label class="field search-field"><span>Buscar en toda la tabla</span><input id="searchInput" type="search" placeholder="Escribe para buscar…"></label>
+          <label class="field"><span>Hoja</span><select id="sheetSelect"></select></label>
+          <label class="field"><span>Agrupar gráfico por</span><select id="groupSelect"></select></label>
+          <label class="field"><span>Filtrar campo</span><select id="filterColumnSelect"></select></label>
+          <label class="field"><span>Valor</span><select id="filterValueSelect" disabled><option value="">Todos</option></select></label>
+        </div>
+      </section>
+
+      <section id="captureArea" class="capture-area export-surface">
+        <div class="kpi-grid">
+          <article class="kpi"><span class="kpi-icon">▦</span><div><small>Registros visibles</small><strong id="kpiRows">0</strong><em id="kpiRowsSub">de 0</em></div></article>
+          <article class="kpi"><span class="kpi-icon">✓</span><div><small>Respuestas Sí</small><strong id="kpiYes">0</strong><em id="kpiYesSub">indicadores positivos</em></div></article>
+          <article class="kpi"><span class="kpi-icon">○</span><div><small>Respuestas No</small><strong id="kpiNo">0</strong><em>incluye vacíos en indicadores</em></div></article>
+          <article class="kpi accent"><span class="kpi-icon">↗</span><div><small>Cumplimiento</small><strong id="kpiPct">0%</strong><em id="kpiIndicatorSub">0 indicadores detectados</em></div></article>
+        </div>
+
+        <section class="insights-grid">
+          <article class="insight-card"><span class="eyebrow">LECTURA RÁPIDA</span><h3 id="insightTitle">Esperando datos</h3><p id="insightText">Carga un archivo para generar hallazgos automáticos.</p></article>
+          <article class="insight-card compact"><span class="eyebrow">CALIDAD DE DATOS</span><div class="quality"><strong id="qualityPct">0%</strong><div class="meter"><i id="qualityBar"></i></div><p id="qualityText">—</p></div></article>
+        </section>
+
+        <section class="chart-grid single-chart">
+          <article class="chart-card full pie-only">
+            <div class="card-head">
+              <div><span class="eyebrow">RESUMEN</span><h3>Sí vs. No</h3></div>
+              <div class="chart-actions no-export">
+                <button data-chart="overall" data-format="png">PNG</button>
+                <button data-chart="overall" data-format="jpg">JPG</button>
+                <button data-chart="overall" data-format="svg">SVG</button>
+              </div>
+            </div>
+            <div id="overallChart" class="chart"></div>
+          </article>
+        </section>
+
+        <section class="table-card">
+          <div class="card-head"><div><span class="eyebrow">DETALLE</span><h3>Registros procesados</h3><p id="tableInfo">0 registros</p></div><div class="no-export"><button id="exportCsvBtn" class="btn small ghost">Descargar CSV filtrado</button></div></div>
+          <div class="table-wrap"><table id="dataTable"><thead></thead><tbody></tbody></table></div>
+          <div class="pagination no-export"><button id="prevPage" class="icon-btn">←</button><span id="pageInfo">Página 1</span><button id="nextPage" class="icon-btn">→</button></div>
+        </section>
+
+        <footer class="report-footer"><span>Control de Operaciones · análisis generado automáticamente</span><span id="generatedAt"></span></footer>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <div id="loading" class="loading hidden"><div class="spinner"></div><strong>Analizando archivo…</strong><span>Detectando estructura e indicadores</span></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
