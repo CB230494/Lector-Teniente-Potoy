@@ -9,7 +9,30 @@ function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show'
 function safeName(s){return String(s||'archivo').replace(/[^a-z0-9áéíóúüñ _-]/gi,'').trim().replace(/\s+/g,'_').slice(0,80)}
 function uniqueHeaders(arr){const used={};return arr.map((h,i)=>{let x=String(h??'').trim()||`Columna ${i+1}`;used[x]=(used[x]||0)+1;return used[x]>1?`${x} (${used[x]})`:x})}
 function detectHeaderRow(matrix){let best=0,bestScore=-1;for(let r=0;r<Math.min(matrix.length,25);r++){const row=matrix[r]||[];const vals=row.map(v=>String(v??'').trim()).filter(Boolean);if(vals.length<2)continue;const uniq=new Set(vals.map(v=>norm(v))).size;const alpha=vals.filter(v=>/[a-záéíóúñ]/i.test(v)).length;const score=vals.length*2+uniq+alpha*1.5-r*.25;if(score>bestScore){bestScore=score;best=r}}return best}
-function parseSheet(ws){const matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false,blankrows:false});if(!matrix.length)return {headers:[],rows:[]};const hr=detectHeaderRow(matrix);const headers=uniqueHeaders(matrix[hr]||[]);const rows=matrix.slice(hr+1).filter(r=>r.some(v=>String(v??'').trim()!=='')).map(r=>Object.fromEntries(headers.map((h,i)=>[h,r[i]??''])));return {headers,rows,headerRow:hr+1}}
+function parseSheet(ws){
+  const clone=Object.assign({},ws);
+  if(Array.isArray(ws['!merges'])){
+    for(const m of ws['!merges']){
+      const srcAddr=XLSX.utils.encode_cell({r:m.s.r,c:m.s.c});
+      const src=ws[srcAddr];
+      if(!src)continue;
+      for(let r=m.s.r;r<=m.e.r;r++){
+        for(let c=m.s.c;c<=m.e.c;c++){
+          const a=XLSX.utils.encode_cell({r,c});
+          if(!clone[a]||clone[a].v==null||String(clone[a].v).trim()===''){
+            clone[a]={...src};
+          }
+        }
+      }
+    }
+  }
+  const matrix=XLSX.utils.sheet_to_json(clone,{header:1,defval:'',raw:false,blankrows:false});
+  if(!matrix.length)return {headers:[],rows:[]};
+  const hr=detectHeaderRow(matrix);
+  const headers=uniqueHeaders(matrix[hr]||[]);
+  const rows=matrix.slice(hr+1).filter(r=>r.some(v=>String(v??'').trim()!=='')).map(r=>Object.fromEntries(headers.map((h,i)=>[h,r[i]??''])));
+  return {headers,rows,headerRow:hr+1}
+}
 function detectIndicators(rows,headers){return headers.filter(h=>{let yes=0,no=0,other=0,blank=0;for(const r of rows){const v=r[h];if(String(v??'').trim()===''){blank++;continue} if(isYes(v))yes++;else if(isNo(v))no++;else other++}const nonblank=yes+no+other;if(!nonblank||yes===0)return false;const binaryRatio=(yes+no)/nonblank;const sparseBinary=(yes+no)/(rows.length||1);return binaryRatio>=.78 && sparseBinary>=.08 && other<=Math.max(2,nonblank*.22)})}
 function normalizeRows(rows,headers,indicators){return rows.map((r,idx)=>{const o={__row:idx+1};for(const h of headers){let v=String(r[h]??'').trim();if(indicators.includes(h)){o[h]=isYes(v)?'Sí':(isNo(v)||v===''?'No':v)}else{o[h]=v===''?'Sin dato':v} }return o})}
 function categoricalColumns(rows,headers){return headers.filter(h=>{const vals=new Set(rows.map(r=>r[h]).filter(v=>v&&v!=='Sin dato'));return vals.size>=2&&vals.size<=60})}
@@ -17,9 +40,60 @@ function processCurrentSheet(){const p=state.sheets[state.sheetName];state.rawRo
 function setupSelectors(){const cats=categoricalColumns(state.rows,state.headers);const group=$('#groupSelect'), fc=$('#filterColumnSelect');group.innerHTML='';fc.innerHTML='<option value="">Sin filtro específico</option>';const preferred=cats.find(h=>/region|deleg|unidad|oper|tipo|grupo|provincia|canton|cantón|distrito|responsable/i.test(h))||cats[0]||'';cats.forEach(h=>{group.add(new Option(h,h));fc.add(new Option(h,h))});state.groupCol=preferred;if(preferred)group.value=preferred;updateFilterValues()}
 function updateFilterValues(){const s=$('#filterValueSelect');s.innerHTML='<option value="">Todos</option>';state.filterCol=$('#filterColumnSelect').value;state.filterVal='';if(!state.filterCol){s.disabled=true;return}s.disabled=false;[...new Set(state.rows.map(r=>r[state.filterCol]))].sort((a,b)=>String(a).localeCompare(String(b),'es')).forEach(v=>s.add(new Option(v,v)))}
 function applyFilters(){const q=norm($('#searchInput').value);state.search=q;state.filterCol=$('#filterColumnSelect').value;state.filterVal=$('#filterValueSelect').value;state.groupCol=$('#groupSelect').value;state.filtered=state.rows.filter(r=>{if(state.filterCol&&state.filterVal&&r[state.filterCol]!==state.filterVal)return false;if(q){return state.headers.some(h=>norm(r[h]).includes(q))}return true});state.page=1;renderAll()}
+
+function unitKey(v){return norm(v).replace(/\s+/g,' ').toUpperCase()}
+function groupedStatus(rows,keyHeader){
+  const ind=state.indicatorCols[0];
+  const map=new Map();
+  if(!keyHeader||!ind)return map;
+  for(const r of rows){
+    const key=unitKey(r[keyHeader]);
+    if(!key||key==='SIN DATO')continue;
+    const yes=r[ind]==='Sí';
+    if(!map.has(key))map.set(key,{allYes:yes,count:1});
+    else{
+      const g=map.get(key);
+      g.allYes=g.allYes&&yes;
+      g.count++;
+    }
+  }
+  return map;
+}
+function delegationCounts(rows=state.filtered){
+  const codeH=state.headers.find(h=>/c[oó]digo/i.test(h));
+  const delH=state.headers.find(h=>/delegaci[oó]n/i.test(h));
+  const keyH=codeH||delH;
+  const m=groupedStatus(rows,keyH);
+  const total=m.size;
+  const y=[...m.values()].filter(v=>v.allYes).length;
+  const n=total-y;
+  return {y,n,total,pct:total?y/total*100:0};
+}
+function cantonCounts(rows=state.filtered){
+  const cantonH=state.headers.find(h=>/cant[oó]n/i.test(h));
+  const m=groupedStatus(rows,cantonH);
+  const total=m.size;
+  const y=[...m.values()].filter(v=>v.allYes).length;
+  const n=total-y;
+  return {y,n,total,pct:total?y/total*100:0};
+}
 function counts(rows=state.filtered){let y=0,n=0;for(const r of rows)for(const h of state.indicatorCols){if(r[h]==='Sí')y++;else if(r[h]==='No')n++}return {y,n,total:y+n,pct:(y+n)?y/(y+n)*100:0}}
 function updateMeta(){const p=state.sheets[state.sheetName];$('#fileName').textContent=state.file.name;$('#fileMeta').textContent=`Hoja: ${state.sheetName} · encabezados detectados en fila ${p.headerRow} · ${fmt(state.rows.length)} registros · ${fmt(state.headers.length)} columnas`;$('#generatedAt').textContent=`Generado: ${new Date().toLocaleString('es-CR')}`}
-function renderKPIs(){const c=counts();$('#kpiRows').textContent=fmt(state.filtered.length);$('#kpiRowsSub').textContent=`de ${fmt(state.rows.length)}`;$('#kpiYes').textContent=fmt(c.y);$('#kpiYesSub').textContent='indicadores positivos';$('#kpiNo').textContent=fmt(c.n);$('#kpiPct').textContent=`${c.pct.toFixed(1)}%`;$('#kpiIndicatorSub').textContent=`${fmt(state.indicatorCols.length)} indicadores detectados`}
+function renderKPIs(){
+  const c=delegationCounts();
+  $('#kpiRows').textContent=fmt(c.total);
+  $('#kpiRowsSub').textContent='delegaciones únicas';
+  $('#kpiYes').textContent=fmt(c.y);
+  $('#kpiYesSub').textContent='delegaciones positivas';
+  $('#kpiNo').textContent=fmt(c.n);
+  $('#kpiPct').textContent=`${c.pct.toFixed(1)}%`;
+  $('#kpiIndicatorSub').textContent=`${fmt(c.total)} delegaciones únicas`;
+  const cc=cantonCounts();
+  $('#cantonYes').textContent=fmt(cc.y);
+  $('#cantonNo').textContent=fmt(cc.n);
+  $('#cantonPct').textContent=`${cc.pct.toFixed(1)}%`;
+  $('#cantonTotal').textContent=`${fmt(cc.total)} cantones únicos`;
+}
 function renderInsights(){const results=state.indicatorCols.map(h=>{let y=0,n=0;state.filtered.forEach(r=>{if(r[h]==='Sí')y++;else if(r[h]==='No')n++});return {h,y,n,p:(y+n)?y/(y+n)*100:0}}).sort((a,b)=>b.p-a.p);if(!results.length){$('#insightTitle').textContent='No se detectaron columnas Sí/No';$('#insightText').textContent='La tabla se cargó correctamente, pero ninguna columna cumple todavía el patrón de indicador binario.'}else{const best=results[0],worst=results.at(-1);$('#insightTitle').textContent=`Mayor cumplimiento: ${best.h}`;$('#insightText').textContent=`${best.p.toFixed(1)}% de respuestas “Sí”. El indicador con menor resultado es “${worst.h}” con ${worst.p.toFixed(1)}%.`}
 let filled=0,total=state.filtered.length*state.headers.length;state.filtered.forEach(r=>state.headers.forEach(h=>{if(r[h]!=='Sin dato')filled++}));const qp=total?filled/total*100:0;$('#qualityPct').textContent=`${qp.toFixed(0)}%`;$('#qualityBar').style.width=`${qp}%`;$('#qualityText').textContent=qp>=95?'Muy buena integridad de datos.':qp>=80?'Integridad adecuada; existen algunos campos sin dato.':'Conviene revisar campos descriptivos incompletos.'}
 function plotLayout(extra={}){return {margin:{l:55,r:20,t:18,b:48},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'Inter, system-ui',color:getComputedStyle(document.body).getPropertyValue('--text').trim(),size:11},showlegend:true,legend:{orientation:'h',y:-.13},...extra}}
@@ -113,43 +187,3 @@ $('#chooseBtn').onclick=()=>$('#fileInput').click();$('#dropZone').onclick=e=>{i
 $('#newFileBtn').onclick=()=>$('#fileInput').click();$('#searchInput').addEventListener('input',applyFilters);$('#sheetSelect').onchange=e=>{state.sheetName=e.target.value;processCurrentSheet()};$('#groupSelect').onchange=applyFilters;$('#filterColumnSelect').onchange=()=>{updateFilterValues();applyFilters()};$('#filterValueSelect').onchange=applyFilters;$('#clearFiltersBtn').onclick=()=>{$('#searchInput').value='';$('#filterColumnSelect').value='';updateFilterValues();applyFilters()};
 $('#prevPage').onclick=()=>{if(state.page>1){state.page--;renderTable()}};$('#nextPage').onclick=()=>{if(state.page<Math.ceil(state.filtered.length/state.pageSize)){state.page++;renderTable()}};$('#exportCsvBtn').onclick=exportCsv;$('#printBtn').onclick=()=>window.print();$$('[data-capture]').forEach(b=>b.onclick=()=>captureDashboard(b.dataset.capture));$$('[data-chart]').forEach(b=>b.onclick=()=>exportPlot(b.dataset.chart,b.dataset.format));
 $('#themeBtn').onclick=()=>{const d=document.documentElement;d.dataset.theme=d.dataset.theme==='dark'?'light':'dark';renderCharts()};
-
-
-function _normUnit(v){
-  return String(v==null?'':v).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .trim().toUpperCase().replace(/\s+/g,' ');
-}
-function renderCantonSummarySafe(){
-  try{
-    if(!window.state || !Array.isArray(state.filtered) || !Array.isArray(state.headers)) return;
-    const cantonH=state.headers.find(h=>/cant[oó]n/i.test(String(h)));
-    const ind=Array.isArray(state.indicators) ? state.indicators[0] : null;
-    if(!cantonH || !ind) return;
-    const grouped=new Map();
-    state.filtered.forEach(r=>{
-      if(!r) return;
-      const key=_normUnit(r[cantonH]);
-      if(!key) return;
-      const yes=isYes(r[ind]);
-      grouped.set(key, grouped.has(key) ? (grouped.get(key)||yes) : yes);
-    });
-    const total=grouped.size;
-    const yes=[...grouped.values()].filter(Boolean).length;
-    const no=total-yes;
-    const pct=total ? yes*100/total : 0;
-    const set=(id,val)=>{const el=document.getElementById(id); if(el) el.textContent=val;};
-    set('cantonYes',yes);set('cantonNo',no);set('cantonPct',pct.toFixed(1)+'%');set('cantonTotal',total+' cantones únicos');
-  }catch(e){ console.error('Resumen cantonal:',e); }
-}
-
-
-document.addEventListener('change',function(e){
-  if(e.target && (e.target.matches('select') || e.target.matches('input[type="file"]'))){
-    setTimeout(renderCantonSummarySafe,250);
-  }
-});
-document.addEventListener('input',function(e){
-  if(e.target && e.target.matches('input[type="search"], input[type="text"]')){
-    setTimeout(renderCantonSummarySafe,80);
-  }
-});
