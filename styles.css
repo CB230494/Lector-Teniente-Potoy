@@ -66,8 +66,9 @@
   .kpi-grid{grid-template-columns:1fr !important}
 }
 
+/* v12: segunda fila de indicadores por cantón */
 .canton-summary{margin-top:14px}
 .canton-summary .summary-label{margin:0 0 8px 4px}
-.canton-summary .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
-.canton-summary .kpi-grid .kpi:first-child{display:flex!important}
-@media(max-width:900px){.canton-summary .kpi-grid{grid-template-columns:1fr!important}}
+.canton-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.canton-kpi-grid .kpi:first-child{display:flex!important}
+@media(max-width:900px){.canton-kpi-grid{grid-template-columns:1fr!important}}
